@@ -1,0 +1,59 @@
+---
+title: "BST 270 Project Reproducible Pipeline"
+author: "Jonah Fisher"
+date: "2024-01-17"
+output: 
+  html_document:
+    toc: true
+    code_fold: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Load Pacman for p_load function
+if(!require("pacman")){
+  install.packages("pacman")
+  library(pacman)
+} else{
+  library(pacman)
+}
+
+# Load all installed packages and install/load all packages that are not installed 
+p_load(tidyverse, data.table, here, ggsci)
+
+# The best theme
+theme_set(theme_bw())
+```
+
+# 
+
+```{r load in elo data}
+project_directory <- here()
+url_elo <- "https://projects.fivethirtyeight.com/nba-model/nba_elo_latest.csv"
+# file.path creates non OS-dependent filepaths (like dealing with windows cursed backslash)
+filepath_elo <- file.path(project_directory, "Data/elo_data.csv")
+
+# Load in data if exists. If it doesn't, fread can handle web downloads then 
+# we can fwrite it
+if(file.exists(relativefilepath_elo)){
+  elo <- fread(relativefilepath_elo)
+} else{
+  elo <- fread(url_elo)
+  fwrite(elo, filepath_elo)
+}
+```
+
+```{r}
+elo
+```
+
+
+
+
+
+
+
+
+
+
