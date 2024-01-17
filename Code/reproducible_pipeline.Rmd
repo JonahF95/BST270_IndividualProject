@@ -1,0 +1,40 @@
+---
+title: "BST270 Individual Project"
+author: "Jonah Fisher"
+date: "2024-01-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+if(require("pacman")){
+  library(pacman)
+} else{
+  install.packages("pacman")
+  library(pacman)
+}
+
+p_load(tidyverse, data.table, here, ggsci)
+
+theme_set(theme_bw())
+```
+
+# Load in data
+
+```{r load basketball elo data}
+project_directory <- here()
+elo_filelocation <- file.path(project_directory, "Data/elo_data.csv")
+elo_url <- ""
+
+
+```
+
+
+
+
+
+
+
+
+
