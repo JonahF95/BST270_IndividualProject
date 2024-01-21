@@ -15,23 +15,132 @@ if(require("pacman")){
   library(pacman)
 }
 
-p_load(tidyverse, data.table, here, ggsci)
+p_load(tidyverse, data.table, here, ggsci, plotly)
 
 theme_set(theme_bw())
 ```
 
+# Congress Demographics {.tabset}
+
+## Data description and project goals
+
+This R Markdown serves as a reproducible pipeline to do replicate 2 figures from 
+the 538 article on rising congressional ages 
+[Congress Today Is Older Than It's Ever Been](https://fivethirtyeight.com/features/aging-congress-boomers/)
+Data are helpfully organized into a tidy, longform dataset, where rows correspond
+to individual congresspersons 2-year period in each unique congress, and columns
+include information on age, party, congress number, state, etc. The two figures
+to be reproduced are:
+
+> 1: The House and Senate are older than ever before
+
+> 2: Congress is never dominated by generations as old as boomers
+
+## 538 Readme data information
+
+This directory contains various demographic data about the United States Senate and House of Representatives over time. It’s been used in the following FiveThirtyEight articles: 
+
+- [Congress Today Is Older Than It’s Ever Been](https://fivethirtyeight.com/features/aging-congress-boomers/), by Geoffrey Skelley (April 3, 2023)
+
+`data_aging_congress.csv` contains information about the age of every member of the U.S. Senate and House from the 66th Congress (1919-1921) to the 118th Congress (2023-2025). Data is as of March 29, 2023, and is based on all voting members who served in either the Senate or House in each Congress. The data excludes delegates or resident commissioners from non-states. Any member who served in both chambers in the same Congress was assigned to the chamber in which they cast more votes. We began with the 66th Congress because it was the first Congress in which all senators had been directly elected, rather than elected by state legislatures, following the [ratification of the 17th Amendment in 1913](https://constitutioncenter.org/the-constitution/amendments/amendment-xvii). 
+
+| Header | Description | Source(s) | 
+| ----- | ------------ | ------ |
+| `congress` | The number of the Congress that this member’s row refers to. For example, `118` indicates the member served in the 118th Congress (2023-2025). | [Biographical Directory of the United States Congress](https://bioguide.congress.gov/); [VoteView.com](https://voteview.com/) | 
+| `start_date` | First day of a Congress. For the 66th Congress to the 73rd Congress, this was March 4. With the [ratification of the 20th Amendment](https://constitutioncenter.org/the-constitution/amendments/amendment-xx), Congress’s start date shifted to Jan. 3 for the 74th Congress to present. | U.S. House of Representatives | 
+| `chamber` | The chamber a member of Congress sat in: `Senate` or `House`. Any member who served in both chambers in the same Congress — e.g., a sitting representative who was later appointed to the Senate — was assigned to the chamber in which they cast more votes. | [Biographical Directory of the United States Congress](https://bioguide.congress.gov/); [VoteView.com](https://voteview.com/) | 
+| `state_abbrev` | The [two-letter postal abbreviation](https://www.bls.gov/respondents/mwr/electronic-data-interchange/appendix-d-usps-state-abbreviations-and-fips-codes.htm) for the state a member represented. | [Biographical Directory of the United States Congress](https://bioguide.congress.gov/); [VoteView.com](https://voteview.com/) | 
+| `party_code` | A code that indicates a member’s party, based on the system used by the [Inter-university Consortium for Political and Social Research](https://www.icpsr.umich.edu/web/ICPSR/studies/07757/datasets/0001/variables/V13?archive=ICPSR). The most common values will be `100` for Democrats, `200` for Republicans and `328` for independents. See [VoteView.com’s full list](https://voteview.com/articles/data_help_parties) for other party codes. If a member switched parties amid a Congress, they are listed with the party they identified with during the majority of their votes. | [VoteView.com](https://voteview.com/) | 
+| `bioname` | Full name of member of Congress. | [Biographical Directory of the United States Congress](https://bioguide.congress.gov/); [VoteView.com](https://voteview.com/) | 
+| `bioguide_id` | Code used by the Biographical Directory of the United States Congress to uniquely identify each member. | [Biographical Directory of the United States Congress](https://bioguide.congress.gov/); [VoteView.com](https://voteview.com/) | 
+| `birthday` | Date of birth for a member. | [UnitedStates GitHub](https://github.com/unitedstates/congress-legislators); [Biographical Directory of the United States Congress](https://bioguide.congress.gov/) | 
+| `cmltv_cong` | The cumulative number of Congresses a member has or had served in (inclusive of listed `congress`), regardless of whether the member was in the Senate or House. E.g. `1` indicates it’s a member’s first Congress. | [Biographical Directory of the United States Congress](https://bioguide.congress.gov/); [VoteView.com](https://voteview.com/) | 
+| `cmltv_chamber` | The cumulative number of Congresses a member has or had served in a `chamber` (inclusive of listed `congress`). E.g. a senator with a `1` indicates it’s the senator’s first Congress in the Senate, regardless of whether they had served in the House before. | [Biographical Directory of the United States Congress](https://bioguide.congress.gov/); [VoteView.com](https://voteview.com/) | 
+| `age_days` | Age in days, calculated as `start_date` minus `birthday`. | |
+| `age_years` | Age in years, calculated by dividing `age_days` by `365.25`. | | 
+| `generation` | Generation the member belonged to, based on the year of birth. Generations in the data are defined as follows: Gilded (1822-1842), Progressive (1843-1859), Missionary (1860-1882), Lost (1883-1900), Greatest (1901-1927), Silent (1928-1945), baby boomer (1946-1964), Generation X (1965-1980), millennial (1981-1996), Generation Z (1997-2012). <br><br>Note: Baby boomers are listed as `Boomers`, Generation X as `Gen X`, millennials as `Millennial` and Generation Z as `Gen Z`. | Pew Research Center for definitions of [Greatest Generation](https://www.pewresearch.org/politics/2016/12/15/americans-name-the-10-most-significant-historic-events-of-their-lifetimes/) to [Generation Z](https://www.pewresearch.org/fact-tank/2020/04/28/millennials-overtake-baby-boomers-as-americas-largest-generation/); [Strauss and Howe](https://journals.sagepub.com/doi/abs/10.1177/153660069301400207?journalCode=jhra) (1991) for definitions for Gilded to Lost generations. | 
+
 # Load in data
 
-```{r load basketball elo data}
+1. Set up directory structure
+2. Read in Congress ages data or download and write to disk if not present
+
+```{r load congress age data}
+# `here` package will automatically set up the 
 project_directory <- here()
-elo_filelocation <- file.path(project_directory, "Data/elo_data.csv")
-elo_url <- ""
+ages_filelocation <- file.path(project_directory, "Data/ages.csv")
+ages_url <- "https://raw.githubusercontent.com/fivethirtyeight/data/master/congress-demographics/data_aging_congress.csv"
 
+# Create Data directory if necessary
+if(!dir.exists(file.path(project_directory, "Data/"))){
+  dir.create(file.path(project_directory, "Data/"))
+}
 
+# Fread can handle URLs automatically
+if(file.exists(ages_filelocation)){
+  print("Reading in ages data from disk")
+  ages <- fread(ages_filelocation)
+} else{
+  print("Ages data not on disk: Loading in ages data from 538 Github:") 
+  print(ages_url)
+  ages <- fread(ages_url)
+  fwrite(ages, ages_filelocation)
+}
 ```
 
+# Figure 1: The House and Senate are older than ever before {.tabset}
 
+This plot shows median age by year, with the senate and house as separate lines. 
+The plot is interactive so plotly will be used to imitate this. First, data wrangling
+will be performed to get cast the longform ages data we have into a year-aggregated
+dataset.
 
+```{r data wrangling}
+ages_year <- dcast(ages[, .(year_ = year(start_date), age_years, chamber)],
+                  year_ ~ chamber, fun.aggregate = median, value.var = "age_years") %>%
+  melt(id.vars = "year_", value.vars = c("House", "Senate"),
+       variable.name = "chamber", value.name = "age_years")
+
+# Ordered properly for the legend
+ages_year[, chamber := factor(chamber, levels = c("Senate", "House"))]
+```
+
+```{r create the first figure}
+p <- ggplot(ages_year, aes(x = year_, y = age_years, color = chamber)) +
+  geom_step(size = 1.25, aes(x = year_, y = age_years, color = chamber)) + 
+  scale_colour_manual(values = c("House" = "darkgreen", "Senate" = "purple")) +
+  labs(title = "The House and Senate are older than ever before",
+       subtitle = "Median age of the U.S. Senate and U.S. House by Congress, 1919 to 2023",
+       color = "",
+       x = "",
+       y = "") +
+  scale_x_continuous(breaks = seq(1920, 2020, by = 10)) +
+  scale_y_continuous(breaks = seq(45, 65, by = 5)) +
+  geom_hline(yintercept = seq(45,65,by = 5), alpha = 0.3) +
+  theme_minimal() +
+  theme(legend.title = element_blank(), legend.position = c(0.1,1),
+        legend.direction = "horizontal", plot.title = element_text(face = "bold")) 
+```
+
+## Static version
+
+This 'static' plot is more accurate visually to the 538 figure but it is not
+interactive. 
+
+```{r show static plot}
+print(p)
+```
+
+## Interactive version
+
+This plot uses `plotly` to create an interactive figure, but some of the js
+code will not handle certain aesthetic features (such as horizontal legend layout)
+so it is not quite accurate to the 538 layout
+
+```{r show interactive plot}
+# For some reason the `tooltip` ordering argument is not working as it lists on the vignette
+ggplotly(p, tooltip = c("color", "x", "y"))
+```
 
 
 
