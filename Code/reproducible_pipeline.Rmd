@@ -1,8 +1,13 @@
 ---
 title: "BST270 Individual Project"
 author: "Jonah Fisher"
-date: "2024-01-17"
-output: html_document
+date: "Last compiled: `r Sys.Date()`"
+output: 
+  html_document:
+    theme: journal
+    toc: true
+    toc_flot: true
+    code_folding: show
 ---
 
 ```{r setup, include=FALSE}
@@ -96,21 +101,23 @@ will be performed to get cast the longform ages data we have into a year-aggrega
 dataset.
 
 ```{r data wrangling}
+# Use a dcast/melt chain to get median age for each chamber by year
 ages_year <- dcast(ages[, .(year_ = year(start_date), age_years, chamber)],
                   year_ ~ chamber, fun.aggregate = median, value.var = "age_years") %>%
   melt(id.vars = "year_", value.vars = c("House", "Senate"),
        variable.name = "chamber", value.name = "age_years")
 
-# Ordered properly for the legend
+# Ordered properly for the legend which lists "Senate" first even though it's later alphabetically
 ages_year[, chamber := factor(chamber, levels = c("Senate", "House"))]
 ```
 
 ```{r create the first figure}
-p <- ggplot(ages_year, aes(x = year_, y = age_years, color = chamber)) +
+p_fig1 <- ggplot(ages_year, aes(x = year_, y = age_years, color = chamber)) +
   geom_step(size = 1.25, aes(x = year_, y = age_years, color = chamber)) + 
   scale_colour_manual(values = c("House" = "darkgreen", "Senate" = "purple")) +
   labs(title = "The House and Senate are older than ever before",
        subtitle = "Median age of the U.S. Senate and U.S. House by Congress, 1919 to 2023",
+       caption = "Data is based on all members who served in either the Senate or House in each Congress, which is notated by the year in\nwhich it was seated. Any member who served in both chambers in the same Congress was assigned to the chamber in which\nthey cast more votes.\n\nSOURCES: BIOGRAPHICAL DIRECTORY OF THE U.S. CONGRESS, U.S. HOUSE OF\nREPRESENTATIVES, U.S. SENATE, UNITEDSTATES GITHUB, VOTEVIEW.COM\nFiveThirtyEight",
        color = "",
        x = "",
        y = "") +
@@ -118,8 +125,10 @@ p <- ggplot(ages_year, aes(x = year_, y = age_years, color = chamber)) +
   scale_y_continuous(breaks = seq(45, 65, by = 5)) +
   geom_hline(yintercept = seq(45,65,by = 5), alpha = 0.3) +
   theme_minimal() +
-  theme(legend.title = element_blank(), legend.position = c(0.1,1),
-        legend.direction = "horizontal", plot.title = element_text(face = "bold")) 
+  theme(legend.title = element_blank(), legend.position = c(0.08,0.98),
+        legend.direction = "horizontal", plot.title = element_text(face = "bold"),
+        plot.caption = element_text(size = 8, hjust = 0, face = "italic", colour = "gray40"),
+        axis.text = element_text(colour = "gray40")) 
 ```
 
 ## Static version
@@ -127,8 +136,8 @@ p <- ggplot(ages_year, aes(x = year_, y = age_years, color = chamber)) +
 This 'static' plot is more accurate visually to the 538 figure but it is not
 interactive. 
 
-```{r show static plot}
-print(p)
+```{r show static plot fig1}
+print(p_fig1)
 ```
 
 ## Interactive version
@@ -137,10 +146,95 @@ This plot uses `plotly` to create an interactive figure, but some of the js
 code will not handle certain aesthetic features (such as horizontal legend layout)
 so it is not quite accurate to the 538 layout
 
-```{r show interactive plot}
+```{r show interactive plot fig1}
 # For some reason the `tooltip` ordering argument is not working as it lists on the vignette
-ggplotly(p, tooltip = c("color", "x", "y"))
+ggplotly(p_fig1, tooltip = c("color", "x", "y"))
 ```
+
+# Figure 2: Congress is never dominated by generations as old as boomers {.tabset}
+
+This figure is an area plot, which again has year on the x-axis. However, this
+plot differs as it shades the y axis into categories of generation (boomer, millenial, etc.)
+according the the percentage of that given year's congress that belongs to each
+generation.
+
+```{r wrangle data for figure 2}
+#Similar dcast/melt chain to above...except with number of each generation
+ages_generations <- dcast(ages[, .(year_ = year(start_date), generation)],
+                  year_ ~ generation, fun.aggregate = length) %>%
+  melt(id.vars = "year_", value.name = "num_seats", variable.name = "generation")
+
+# Get the percentage of seats held be each generation stratified by year
+ages_generations[, pct_seats := 100*num_seats/sum(num_seats), by = year_]
+
+# Formatting the generations to be capitalized and in correct order for legend
+ages_generations[, generation := factor(toupper(generation), levels = c(
+ 'GEN Z',
+ 'MILLENNIAL',
+ 'GEN X',
+ 'BOOMERS',
+ 'SILENT',
+ 'GREATEST',
+ 'LOST',
+ 'MISSIONARY',
+ 'PROGRESSIVE',
+ 'GILDED'
+))]
+```
+
+
+```{r create plot for figure2}
+# Similar colors to the plot, although generally there are higher RBG (lighter) 
+# I think for the figure
+cols <- c("red", "lightblue", "purple", "orange", "yellow",
+          "lightgreen", "grey15", "magenta", "grey80", "grey90" )
+
+# Geom_Area is the appropriate command to create this 'shaded' plot
+p_fig2 <- ggplot(ages_generations) + 
+  geom_area(aes(x = year_, y = pct_seats, fill = generation), alpha = 0.8) +
+  labs(title = "Baby boomers are the biggest generation in Congress today",
+       subtitle = "Share of members in Congress from each generation, 1919 to 2023",
+       caption = "Birth years for the Greatest Generation to Generation Z are based on Pew Research Center definitions. For earlier\ngenerations, definitions are based on Strauss and Howe (1991). They are: Gilded (1822-1842), Progressive (1843-1859),\nMissionary (1860-1882), Lost (1883-1900), Greatest (1901-1927), Silent (1928-1945), baby boomer (1946-1964), Generation X\n(1965-1980), millennial (1981-1996), Generation Z (1997-2012).",
+       color = "",
+       x = "",
+       y = "") +
+  scale_x_continuous(breaks = seq(1920, 2020, by = 10)) +
+  scale_y_continuous(breaks = seq(0, 100, by = 20)) +
+  scale_fill_manual(labels = ages_generations[, levels(generation)], values = cols) +
+  geom_hline(yintercept = seq(0, 100, by = 20), alpha = 0.3) +
+  theme_minimal() +
+  theme(legend.title = element_blank(), legend.position = c(0.35,0.98),
+        legend.direction = "horizontal", plot.title = element_text(face = "bold"),
+        plot.caption = element_text(size = 8, hjust = 0, face = "italic", colour = "gray40"),
+        axis.text = element_text(colour = "gray40"), legend.text = element_text(size = 8),
+        legend.key.size = unit(0.2, "cm")) 
+```
+
+## Static version
+
+This 'static' plot is once again more accurate visually to the 538 figure but it is not
+interactive. 
+
+```{r show static plot fig2}
+print(p_fig2)
+```
+
+## Interactive version
+
+This plot uses `plotly` to create an interactive figure, but some of the js
+code will not handle certain aesthetic features (such as horizontal legend layout)
+so it is not quite accurate to the 538 layout
+
+```{r show interactive plot fig2}
+# For some reason the `tooltip` ordering argument is not working as it lists on the vignette
+ggplotly(p_fig2, tooltip = c("color", "x", "y"))
+```
+
+
+
+
+
+
 
 
 
